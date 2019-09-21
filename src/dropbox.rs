@@ -5,13 +5,15 @@ use serde::Deserialize;
 pub enum Error {
     ListingFetch(reqwest::Error),
     ListingParse(reqwest::Error),
+    TempLinkFetch(reqwest::Error),
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self {
-            Self::ListingFetch(ref err) => write!(f, "error when listing files: {}", err),
-            Self::ListingParse(ref err) => write!(f, "error when deserializing payload: {}", err),
+            Self::ListingFetch(ref err) => write!(f, "error when fetching file listing: {}", err),
+            Self::ListingParse(ref err) => write!(f, "error when parsing file listing: {}", err),
+            Self::TempLinkFetch(ref err) => write!(f, "error when fetching temporary link: {}", err),
         }
     }
 }
@@ -21,11 +23,12 @@ impl std::error::Error for Error {
         match *self {
             Self::ListingFetch(ref err) => Some(err),
             Self::ListingParse(ref err) => Some(err),
+            Self::TempLinkFetch(ref err) => Some(err),
         }
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct ImageListing {
     entries: Vec<ImageMetadata>,
 }
@@ -36,31 +39,59 @@ pub struct ImageMetadata {
     name: String,
 }
 
-pub struct HTTPTempLink(String);
+#[derive(Deserialize, Debug)]
+pub struct ImageTempLink {
+    link: String,
+}
 
-pub fn get_image_listing() -> Result<ImageListing, Error> {
-    let client = Client::new();
-    let mut response = client
-        .post("https://api.dropboxapi.com/2/files/list_folder")
-        .header("Authorization", "Bearer KHopaZZMKCIAAAAAAAAH5ojsxHMYzWlrvd_6wCTguwkRbQCPNTt6NSL-C5YpDNUX")
-        .header("Content-Type", "application/json")
-        .body(r#"{ "path": "" }"#)
-        .send()
-        .map_err(Error::ListingFetch)?
-    ;
+pub struct Dropbox;
 
-    let http_list_response: ImageListing = response.json().map_err(Error::ListingParse)?;
+impl Dropbox {
+    pub fn get_image_listing(token: &str) -> Result<ImageListing, Error> {
+        let client = Client::new();
+        let mut response = client
+            .post("https://api.dropboxapi.com/2/files/list_folder")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json")
+            .body(r#"{ "path": "" }"#)
+            .send()
+            .map_err(Error::ListingFetch)?
+        ;
 
-    Ok(http_list_response)
+        response.json().map_err(Error::ListingParse)
+    }
+
+    pub fn get_temporary_link(path: &str, token: &str) -> Result<ImageTempLink, Error> {
+        let client = Client::new();
+        let mut response = client
+            .post("https://api.dropboxapi.com/2/files/get_temporary_link")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json")
+            .body(format!(r#"{{ "path": "{}" }}"#, path))
+            .send()
+            .map_err(Error::TempLinkFetch)?
+        ;
+
+        response.json().map_err(Error::ListingParse)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    const TOKEN: &str  = "KHopaZZMKCIAAAAAAAAH5ojsxHMYzWlrvd_6wCTguwkRbQCPNTt6NSL-C5YpDNUX";
+
     #[test]
     fn test_get_image_listing() {
-        let response = get_image_listing().unwrap();
+        let response = Dropbox::get_image_listing(&TOKEN).unwrap();
         println!("{:?}", response.entries);
+    }
+
+    #[test]
+    fn test_get_temporary_link() {
+        const TEST_PATH: &str = "/robert-horvick-1r4upyipcfm-unsplash.jpg";
+        let response = Dropbox::get_temporary_link(&TEST_PATH, &TOKEN).unwrap();
+        println!("{}", response.link);
     }
 }

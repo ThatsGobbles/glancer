@@ -1,5 +1,5 @@
 [dropbox]
 # Generated Dropbox app token.
-token = "Bearer KHopaZZMKCIAAAAAAAAH5ojsxHMYzWlrvd_6wCTguwkRbQCPNTt6NSL-C5YpDNUX"
+token = "KHopaZZMKCIAAAAAAAAH5ojsxHMYzWlrvd_6wCTguwkRbQCPNTt6NSL-C5YpDNUX"
 get_link_api_url = "https://api.dropboxapi.com/2/files/get_temporary_link"
 list_link_api_url = "https://api.dropboxapi.com/2/files/list_folder"
