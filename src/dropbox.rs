@@ -1,11 +1,13 @@
 use reqwest::Client;
 use serde::Deserialize;
+use rand::seq::SliceRandom;
 
 #[derive(Debug)]
 pub enum Error {
     ListingFetch(reqwest::Error),
     ListingParse(reqwest::Error),
     TempLinkFetch(reqwest::Error),
+    EmptyListing,
 }
 
 impl std::fmt::Display for Error {
@@ -14,6 +16,7 @@ impl std::fmt::Display for Error {
             Self::ListingFetch(ref err) => write!(f, "error when fetching file listing: {}", err),
             Self::ListingParse(ref err) => write!(f, "error when parsing file listing: {}", err),
             Self::TempLinkFetch(ref err) => write!(f, "error when fetching temporary link: {}", err),
+            Self::EmptyListing => write!(f, "file listing is empty"),
         }
     }
 }
@@ -24,30 +27,31 @@ impl std::error::Error for Error {
             Self::ListingFetch(ref err) => Some(err),
             Self::ListingParse(ref err) => Some(err),
             Self::TempLinkFetch(ref err) => Some(err),
+            Self::EmptyListing => None,
         }
     }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ImageListing {
-    entries: Vec<ImageMetadata>,
+    pub entries: Vec<ImageMetadata>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ImageMetadata {
-    path_lower: String,
-    name: String,
+    pub path_lower: String,
+    pub name: String,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct ImageTempLink {
-    link: String,
+    pub link: String,
 }
 
 pub struct Dropbox;
 
 impl Dropbox {
-    pub fn get_image_listing(token: &str) -> Result<ImageListing, Error> {
+    pub fn get_image_listing(token: &str) -> Result<Vec<String>, Error> {
         let client = Client::new();
         let mut response = client
             .post("https://api.dropboxapi.com/2/files/list_folder")
@@ -58,10 +62,10 @@ impl Dropbox {
             .map_err(Error::ListingFetch)?
         ;
 
-        response.json().map_err(Error::ListingParse)
+        response.json::<ImageListing>().map_err(Error::ListingParse).map(|il| il.entries.into_iter().map(|e| e.path_lower).collect())
     }
 
-    pub fn get_temporary_link(path: &str, token: &str) -> Result<ImageTempLink, Error> {
+    pub fn get_temporary_link(path: &str, token: &str) -> Result<String, Error> {
         let client = Client::new();
         let mut response = client
             .post("https://api.dropboxapi.com/2/files/get_temporary_link")
@@ -72,7 +76,15 @@ impl Dropbox {
             .map_err(Error::TempLinkFetch)?
         ;
 
-        response.json().map_err(Error::ListingParse)
+        response.json::<ImageTempLink>().map_err(Error::ListingParse).map(|itl| itl.link)
+    }
+
+    pub fn get_random_temporary_link(token: &str) -> Result<String, Error> {
+        let listing = Self::get_image_listing(&token)?;
+        let mut rng = rand::thread_rng();
+        let choice = listing.choose(&mut rng).ok_or(Error::EmptyListing)?;
+
+        Self::get_temporary_link(&choice, &token)
     }
 }
 
@@ -85,13 +97,19 @@ mod tests {
     #[test]
     fn test_get_image_listing() {
         let response = Dropbox::get_image_listing(&TOKEN).unwrap();
-        println!("{:?}", response.entries);
+        println!("{:?}", response);
     }
 
     #[test]
     fn test_get_temporary_link() {
         const TEST_PATH: &str = "/robert-horvick-1r4upyipcfm-unsplash.jpg";
-        let response = Dropbox::get_temporary_link(&TEST_PATH, &TOKEN).unwrap();
-        println!("{}", response.link);
+        let temp_link = Dropbox::get_temporary_link(&TEST_PATH, &TOKEN).unwrap();
+        println!("{}", temp_link);
+    }
+
+    #[test]
+    fn test_get_random_temporary_link() {
+        let temp_link = Dropbox::get_random_temporary_link(&TOKEN).unwrap();
+        println!("{}", temp_link);
     }
 }

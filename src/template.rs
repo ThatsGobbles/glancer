@@ -1,22 +1,20 @@
 markup::define! {
-    Hello<'a>(name: &'a str) {
+    Dropbox<'a>(img_url: &'a str) {
         {markup::doctype()}
         html {
             head {
-                title { "Hello " {name} }
+                title { "Dropbox Images" }
             }
             body {
                 #main.container {
-                    {Greeting { name: "Everyone!" }}
-                    br;
-                    {Greeting { name: name }}
+                    img[src = img_url, alt = ""] {}
+                    // br;
+                    // p.url_info {
+                    //     "Link: " {img_url}
+                    // }
                 }
             }
         }
     }
-    Greeting<'a>(name: &'a str) {
-        p.greeting {
-            "Hello " {name} "!"
-        }
-    }
 }
+
