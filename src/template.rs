@@ -17,4 +17,3 @@ markup::define! {
         }
     }
 }
-
